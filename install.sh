@@ -198,6 +198,8 @@ log "v4l2loopback.ko installiert"
 # ---- 3. Daemon ----
 echo ""
 info "Baue surface-kamera-daemon..."
+systemctl --user stop surface-kamera-daemon 2>/dev/null || true
+sleep 1
 if [[ ! -f "$SCRIPT_DIR/surface-kamera-daemon.c" ]]; then
     err "surface-kamera-daemon.c nicht gefunden!"
 fi
