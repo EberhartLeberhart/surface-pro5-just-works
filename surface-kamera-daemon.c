@@ -141,6 +141,7 @@ static void switcher_start(void) {
     syslog(LOG_INFO, "Kamera: Switcher PID=%d", (int)pid);
 }
 
+/* -1=nichts, 0=front, 1=rear, 2=restart */
 static int read_cmd(void) {
     FILE *f = fopen(CMD_FILE, "r");
     if (!f) return -1;
@@ -150,6 +151,7 @@ static int read_cmd(void) {
     unlink(CMD_FILE);
     if (strncmp(buf, "rear", 4) == 0) return 1;
     if (strncmp(buf, "front", 5) == 0) return 0;
+    if (strncmp(buf, "restart", 7) == 0) return 2;
     return -1;
 }
 
@@ -252,7 +254,7 @@ int main(void) {
     while (running) {
         reap();
 
-        /* === 1. Kamerawechsel via CMD Datei === */
+        /* === 1. Kamerawechsel/Neustart via CMD Datei === */
         int cmd = read_cmd();
         if (cmd == 0 && aktive_kamera != 0) {
             syslog(LOG_INFO, "Kamera: Wechsel zu Frontkamera");
@@ -261,6 +263,10 @@ int main(void) {
         } else if (cmd == 1 && aktive_kamera != 1) {
             syslog(LOG_INFO, "Kamera: Wechsel zu Rueckkamera");
             pipeline_start(1);
+            pipeline_stable_since = 0;
+        } else if (cmd == 2) {
+            syslog(LOG_INFO, "Kamera: Neustart Pipeline...");
+            pipeline_start(aktive_kamera);
             pipeline_stable_since = 0;
         }
 
