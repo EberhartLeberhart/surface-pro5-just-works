@@ -24,16 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 KERNEL=$(uname -r)
 PKG_MANAGER=""
 
-# Easter Egg 🐐
-easter_egg() {
-    if [[ ! -f ~/.surface-kamera-installed ]]; then
-        touch ~/.surface-kamera-installed
-        xdg-open "https://www.youtube.com/watch?v=RrVx7JSLAWs" 2>/dev/null &
-    elif [[ ! -f ~/.surface-kamera-v2 ]]; then
-        touch ~/.surface-kamera-v2
-        xdg-open "https://www.youtube.com/watch?v=RrVx7JSLAWs" 2>/dev/null &
-    fi
-}
+
 
 # Banner
 clear
@@ -44,9 +35,6 @@ echo -e "${BOLD}=================================================${NC}"
 echo -e "   Kernel: ${BLUE}$KERNEL${NC}"
 echo -e "${BOLD}=================================================${NC}"
 echo ""
-
-# Easter Egg starten
-easter_egg
 
 # Root Check
 if [[ $EUID -eq 0 ]]; then
