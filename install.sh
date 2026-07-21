@@ -98,10 +98,11 @@ case $PKG_MANAGER in
         KERNEL_DEV="linux-headers-$(uname -r)"
         ;;
     dnf)
-        PKGS="gcc make gstreamer1-tools gstreamer1-plugins-good
-              gstreamer1-plugins-bad-free libcamera-tools v4l-utils
-              zenity python3-gobject git"
-        KERNEL_DEV="kernel-devel-$(uname -r)"
+        PKGS="gcc make gstreamer1 gstreamer1-plugins-good
+              gstreamer1-plugins-bad-free libcamera libcamera-tools
+              v4l-utils zenity python3-gobject git"
+        # linux-surface Kernel auf Fedora bringt kernel-devel selbst mit
+        KERNEL_DEV=""
         ;;
     pacman)
         PKGS="gcc make gst-plugins-good gst-plugins-bad
