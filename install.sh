@@ -131,13 +131,12 @@ info "Baue dw9719 Fix..."
 if [[ ! -f "$SCRIPT_DIR/dw9719.c" ]]; then
     info "Lade dw9719 Quellcode..."
     rm -rf /tmp/lsk-dw9719
-        git clone --depth=1 --filter=blob:none --sparse \
-            -b v6.19-surface \
-            https://github.com/linux-surface/kernel.git /tmp/lsk-dw9719 2>/dev/null
-        cd /tmp/lsk-dw9719
-        git sparse-checkout set drivers/media/i2c/ 2>/dev/null
-        cd "$SCRIPT_DIR"
-    fi
+    git clone --depth=1 --filter=blob:none --sparse \
+        -b v6.19-surface \
+        https://github.com/linux-surface/kernel.git /tmp/lsk-dw9719 2>/dev/null
+    cd /tmp/lsk-dw9719
+    git sparse-checkout set drivers/media/i2c/ 2>/dev/null
+    cd "$SCRIPT_DIR"
     cp /tmp/lsk-dw9719/drivers/media/i2c/dw9719.c "$SCRIPT_DIR/"
 fi
 
