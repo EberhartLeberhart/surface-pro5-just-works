@@ -98,9 +98,9 @@ case $PKG_MANAGER in
         KERNEL_DEV="linux-headers-$(uname -r)"
         ;;
     dnf)
-        PKGS="gcc make gstreamer1 gstreamer1-plugins-good
-              gstreamer1-plugins-bad-free libcamera libcamera-tools
-              v4l-utils zenity python3-gobject git"
+        PKGS="gcc make gstreamer1-tools gstreamer1-plugins-good
+              gstreamer1-plugins-bad-free libcamera-tools v4l-utils
+              zenity python3-gobject git"
         KERNEL_DEV="kernel-devel-$(uname -r)"
         ;;
     pacman)
@@ -129,7 +129,7 @@ info "Baue dw9719 Fix..."
 
 if [[ ! -f "$SCRIPT_DIR/dw9719.c" ]]; then
     info "Lade dw9719 Quellcode..."
-    if [[ ! -d "/tmp/lsk-dw9719" ]]; then
+    rm -rf /tmp/lsk-dw9719
         git clone --depth=1 --filter=blob:none --sparse \
             -b v6.19-surface \
             https://github.com/linux-surface/kernel.git /tmp/lsk-dw9719 2>/dev/null
@@ -183,10 +183,9 @@ log "dw9719.ko installiert"
 # ---- 2. v4l2loopback ----
 echo ""
 info "Baue v4l2loopback..."
-if [[ ! -d "/tmp/v4l2loopback" ]]; then
-    git clone --depth=1 https://github.com/umlaeute/v4l2loopback.git \
-        /tmp/v4l2loopback 2>/dev/null
-fi
+rm -rf /tmp/v4l2loopback
+git clone --depth=1 https://github.com/umlaeute/v4l2loopback.git \
+    /tmp/v4l2loopback 2>/dev/null
 cd /tmp/v4l2loopback
 make -C /lib/modules/$KERNEL/build M="$(pwd)" modules 2>&1 | tail -2
 sudo cp v4l2loopback.ko \
@@ -198,8 +197,6 @@ log "v4l2loopback.ko installiert"
 # ---- 3. Daemon ----
 echo ""
 info "Baue surface-kamera-daemon..."
-systemctl --user stop surface-kamera-daemon 2>/dev/null || true
-sleep 1
 if [[ ! -f "$SCRIPT_DIR/surface-kamera-daemon.c" ]]; then
     err "surface-kamera-daemon.c nicht gefunden!"
 fi
