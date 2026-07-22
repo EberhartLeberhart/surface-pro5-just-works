@@ -223,6 +223,85 @@ sudo cp "$SCRIPT_DIR/drivers/media/i2c/dw9719.ko" \
 sudo depmod -a
 log "dw9719.ko installiert"
 
+# ---- 1b. int3472 avdd Fix (Surface Pro 5) ----
+echo ""
+info "Baue int3472 avdd Fix (Kameras bekommen Spannung)..."
+
+export INT3472_SRC="$SCRIPT_DIR/int3472-src"
+if [[ ! -f "$INT3472_SRC/discrete.c" ]]; then
+    info "Lade int3472 Quellcode..."
+    rm -rf /tmp/lsk-int3472
+    git clone --depth=1 --filter=blob:none --sparse \
+        -b v6.19-surface \
+        https://github.com/linux-surface/kernel.git /tmp/lsk-int3472 2>/dev/null
+    cd /tmp/lsk-int3472
+    git sparse-checkout set drivers/platform/x86/intel/int3472/ 2>/dev/null
+    cd "$SCRIPT_DIR"
+    mkdir -p "$INT3472_SRC"
+    cp /tmp/lsk-int3472/drivers/platform/x86/intel/int3472/* "$INT3472_SRC/" 2>/dev/null
+fi
+
+if [[ ! -f "$INT3472_SRC/discrete.c" ]]; then
+    err "int3472 Quellcode konnte nicht geladen werden."
+fi
+
+# discrete.c anker-basiert patchen (idempotent, versionsrobust - kein .rej)
+python3 << 'PYEOF'
+import os, sys
+path = os.path.join(os.environ['INT3472_SRC'], 'discrete.c')
+with open(path) as f:
+    c = f.read()
+anchor = "\tint3472_get_con_id_and_polarity(int3472, &type, &con_id, &gpio_flags, &enable_time_us);"
+block = (
+    "\t/*\n"
+    "\t * Surface Pro 5 quirk: The DSDT marks the ov8865 rear camera's avdd\n"
+    "\t * regulator GPIO as a privacy LED. Remap it to power-enable so the\n"
+    "\t * regulator framework powers the sensor (fixes \"avdd not found\").\n"
+    "\t */\n"
+    "\tif (type == INT3472_GPIO_TYPE_PRIVACY_LED && int3472->sensor &&\n"
+    "\t    !strcmp(acpi_device_hid(int3472->sensor), \"INT347A\")) {\n"
+    "\t\tdev_info(int3472->dev, \"Surface Pro 5: remapping privacy-led to power-enable for ov8865\\n\");\n"
+    "\t\ttype = INT3472_GPIO_TYPE_POWER_ENABLE;\n"
+    "\t}\n\n"
+)
+if "INT347A" in c:
+    print("discrete.c bereits gepatcht")
+elif anchor in c:
+    with open(path, "w") as f:
+        f.write(c.replace(anchor, block + anchor, 1))
+    print("discrete.c gepatcht")
+else:
+    sys.exit("ANKER nicht gefunden - Kernel-Version inkompatibel, bitte melden")
+PYEOF
+
+# Kombiniertes Modul bauen (umgeht Symbol-Abhaengigkeiten der Split-Module)
+cat > "$INT3472_SRC/Kbuild" << 'KBUILD'
+obj-m := intel_skl_int3472.o
+intel_skl_int3472-y := discrete.o common.o clk_and_regulator.o led.o discrete_quirks.o
+KBUILD
+
+make -C "$BUILD_DIR" M="$INT3472_SRC" modules 2>&1 | tail -3
+
+if [[ ! -f "$INT3472_SRC/intel_skl_int3472.ko" ]]; then
+    err "intel_skl_int3472.ko wurde nicht gebaut - Build fehlgeschlagen.
+     Pruefe die make-Ausgabe oben."
+fi
+
+# Original-Split-Module sichern+deaktivieren (kompressions-agnostisch: .ko/.ko.xz/.ko.zst)
+INT3472_DST="/lib/modules/$KERNEL/kernel/drivers/platform/x86/intel/int3472"
+for m in intel_skl_int3472_discrete intel_skl_int3472_common; do
+    for f in "$INT3472_DST/$m".ko*; do
+        [[ -e "$f" && "$f" != *.disabled ]] || continue
+        sudo mv "$f" "$f.disabled"
+    done
+done
+
+# Kombiniertes Modul installieren
+sudo cp "$INT3472_SRC/intel_skl_int3472.ko" "$INT3472_DST/"
+sudo depmod -a
+log "intel_skl_int3472.ko (avdd Fix) installiert"
+warn "int3472 wird frueh beim Boot geladen - fuer den avdd-Fix ist ein REBOOT noetig."
+
 # ---- 2. v4l2loopback ----
 echo ""
 info "Baue v4l2loopback..."
@@ -339,6 +418,8 @@ echo -e "   Daemon:         ${BLUE}/usr/local/bin/surface-kamera-daemon${NC}"
 echo -e "   Switcher:       ${BLUE}~/.local/bin/surface-kamera-switcher.py${NC}"
 echo -e "   Bekannte Apps:  ${BLUE}/etc/surface-kamera/known-apps.conf${NC}"
 echo ""
-echo -e "   Test: ${YELLOW}cam --list${NC}"
+echo -e "   ${YELLOW}WICHTIG:${NC} Fuer den avdd-Fix jetzt einmal neustarten:"
+echo -e "           ${YELLOW}sudo reboot${NC}"
+echo -e "   Danach testen mit: ${YELLOW}cam --list${NC}"
 echo -e "${BOLD}=================================================${NC}"
 echo ""
