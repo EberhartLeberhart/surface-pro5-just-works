@@ -254,17 +254,20 @@ with open(path) as f:
 anchor = "\tint3472_get_con_id_and_polarity(int3472, &type, &con_id, &gpio_flags, &enable_time_us);"
 block = (
     "\t/*\n"
-    "\t * Surface Pro 5 quirk: The DSDT marks the ov8865 rear camera's avdd\n"
-    "\t * regulator GPIO as a privacy LED. Remap it to power-enable so the\n"
-    "\t * regulator framework powers the sensor (fixes \"avdd not found\").\n"
+    "\t * Surface Pro 5 quirk: The DSDT marks the camera avdd regulator GPIO\n"
+    "\t * as a privacy LED for both sensors (ov8865 rear / INT347A and\n"
+    "\t * ov5693 front / INT33BE). Remap to power-enable so the regulator\n"
+    "\t * framework powers the sensors (fixes \"avdd not found\").\n"
     "\t */\n"
     "\tif (type == INT3472_GPIO_TYPE_PRIVACY_LED && int3472->sensor &&\n"
-    "\t    !strcmp(acpi_device_hid(int3472->sensor), \"INT347A\")) {\n"
-    "\t\tdev_info(int3472->dev, \"Surface Pro 5: remapping privacy-led to power-enable for ov8865\\n\");\n"
+    "\t    (!strcmp(acpi_device_hid(int3472->sensor), \"INT347A\") ||\n"
+    "\t     !strcmp(acpi_device_hid(int3472->sensor), \"INT33BE\"))) {\n"
+    "\t\tdev_info(int3472->dev, \"Surface Pro 5: remapping privacy-led to power-enable (%s)\\n\",\n"
+    "\t\t\t acpi_device_hid(int3472->sensor));\n"
     "\t\ttype = INT3472_GPIO_TYPE_POWER_ENABLE;\n"
     "\t}\n\n"
 )
-if "INT347A" in c:
+if "remapping privacy-led to power-enable" in c:
     print("discrete.c bereits gepatcht")
 elif anchor in c:
     with open(path, "w") as f:
