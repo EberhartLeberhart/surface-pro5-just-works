@@ -124,6 +124,44 @@ for pkg in $PKGS; do
 done
 log "Abhängigkeiten OK"
 
+# ---- Kernel Build-Verzeichnis prüfen (Guard) ----
+# dw9719- und v4l2loopback-Build brauchen /lib/modules/$(uname -r)/build.
+# Fehlt es, bricht der Build sonst kryptisch mitten im make ab
+# ("missing Makefile"), gefolgt von "cannot stat dw9719.ko".
+# Wir fangen das hier VOR dem Build ab und sagen klar was zu tun ist.
+echo ""
+info "Prüfe Kernel Build-Verzeichnis..."
+BUILD_DIR="/lib/modules/$KERNEL/build"
+
+if [[ ! -d "$BUILD_DIR" ]]; then
+    warn "Build-Verzeichnis fehlt: $BUILD_DIR"
+    echo ""
+
+    # Fall A: Es ist bereits ein neuerer Surface-Kernel installiert als der
+    # gerade laufende -> es fehlt nur ein Reboot (klassischer uname -r Mismatch).
+    NEWEST=$(ls -1 /lib/modules/ 2>/dev/null | grep -i surface | sort -V | tail -1)
+    if [[ -n "$NEWEST" && "$NEWEST" != "$KERNEL" && -d "/lib/modules/$NEWEST/build" ]]; then
+        err "Du läufst auf Kernel $KERNEL, installiert ist aber bereits $NEWEST.
+     Bitte in den neuen Kernel neustarten und den Installer erneut ausführen:
+
+         sudo reboot"
+    fi
+
+    # Fall B: Header-/devel-Paket für den laufenden Kernel fehlt.
+    case $PKG_MANAGER in
+        apt)    HDR_HINT="sudo apt install linux-headers-$KERNEL" ;;
+        dnf)    HDR_HINT="sudo dnf install kernel-surface-devel   # passend zum linux-surface Kernel" ;;
+        pacman) HDR_HINT="sudo pacman -S linux-surface-headers" ;;
+    esac
+    err "Die Kernel-Header für den laufenden Kernel fehlen.
+     Installiere sie (und starte ggf. in den passenden Kernel neu):
+
+         $HDR_HINT
+
+     Danach prüfen mit:  ls -l $BUILD_DIR"
+fi
+log "Build-Verzeichnis vorhanden: $BUILD_DIR"
+
 # ---- 1. dw9719 Fix ----
 echo ""
 info "Baue dw9719 Fix..."
@@ -175,6 +213,11 @@ EOF
 make -C /lib/modules/$KERNEL/build M="$SCRIPT_DIR/drivers/media/i2c" \
     modules 2>&1 | tail -2
 
+if [[ ! -f "$SCRIPT_DIR/drivers/media/i2c/dw9719.ko" ]]; then
+    err "dw9719.ko wurde nicht gebaut - der Kernel-Modul-Build ist fehlgeschlagen.
+     Prüfe die make-Ausgabe oben und ob $BUILD_DIR vollständig ist."
+fi
+
 sudo cp "$SCRIPT_DIR/drivers/media/i2c/dw9719.ko" \
     /lib/modules/$KERNEL/kernel/drivers/media/i2c/
 sudo depmod -a
@@ -188,6 +231,10 @@ git clone --depth=1 https://github.com/umlaeute/v4l2loopback.git \
     /tmp/v4l2loopback 2>/dev/null
 cd /tmp/v4l2loopback
 make -C /lib/modules/$KERNEL/build M="$(pwd)" modules 2>&1 | tail -2
+if [[ ! -f v4l2loopback.ko ]]; then
+    err "v4l2loopback.ko wurde nicht gebaut - Build fehlgeschlagen.
+     Prüfe die make-Ausgabe oben."
+fi
 sudo cp v4l2loopback.ko \
     /lib/modules/$KERNEL/kernel/drivers/media/v4l2-core/
 sudo depmod -a
